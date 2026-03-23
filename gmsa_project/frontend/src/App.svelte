@@ -119,7 +119,7 @@
     </div>
     <h1 class="page-title mb-2">Gestor Multiservicio<br />de Almacenamiento</h1>
     <p class="page-subtitle">
-      Plataforma local para la carga de archivos mediante NFS, FTP, SFTP, S3&nbsp;/&nbsp;MinIO y SMB,
+      Plataforma local para la carga de archivos mediante NFS, FTP, S3&nbsp;/&nbsp;MinIO y SMB,
       con validaciones, historial persistente y arquitectura preparada para integraciones reales.
     </p>
   </div>

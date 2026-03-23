@@ -23,29 +23,26 @@ Arquitectura:
         1. Crear la subclase en ``storage/<protocolo>.py``.
         2. Instanciarla en el diccionario ``_REGISTRY`` a continuación.
         3. No es necesario modificar ningún otro módulo.
+
+    SFTP queda excluido intencionalmente de este registro.
 """
 
 from __future__ import annotations
 
 from app.storage.base import StorageHandler
-from app.storage.local import LocalStorageHandler
+from app.storage.ftp import FTPStorageHandler
+from app.storage.nfs import NFSStorageHandler
+from app.storage.s3 import S3StorageHandler
+from app.storage.smb import SMBStorageHandler
 
 # ---------------------------------------------------------------------------
-# Registro de protocolos → manejadores
-#
-# En modo simulación, todos los protocolos utilizan ``LocalStorageHandler``
-# con subdirectorios independientes bajo ``settings.UPLOAD_DIR``.
-#
-# Nota sobre SFTP: comparte el directorio "ftp" con FTP en simulación.
-# Al integrar el protocolo SFTP real, se debe crear un manejador dedicado
-# y reemplazar la entrada correspondiente de forma independiente.
+# Registro de protocolos → manejadores reales
 # ---------------------------------------------------------------------------
 _REGISTRY: dict[str, StorageHandler] = {
-    "nfs":  LocalStorageHandler("nfs"),
-    "ftp":  LocalStorageHandler("ftp"),
-    "sftp": LocalStorageHandler("ftp"),   # carpeta compartida en simulación
-    "s3":   LocalStorageHandler("s3"),
-    "smb":  LocalStorageHandler("smb"),
+    "s3": S3StorageHandler(),
+    "ftp": FTPStorageHandler(),
+    "smb": SMBStorageHandler(),
+    "nfs": NFSStorageHandler(),
 }
 
 
@@ -66,5 +63,7 @@ def get_handler(protocol: str) -> StorageHandler:
     """
     handler = _REGISTRY.get(protocol.lower())
     if handler is None:
-        raise ValueError(f"No hay manejador de almacenamiento registrado para el protocolo: '{protocol}'")
+        raise ValueError(
+            f"No hay manejador de almacenamiento registrado para el protocolo: '{protocol}'"
+        )
     return handler

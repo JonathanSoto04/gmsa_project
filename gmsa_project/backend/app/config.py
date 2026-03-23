@@ -14,14 +14,23 @@ Arquitectura:
     y metadatos del proyecto. Al centralizar la configuración aquí se
     simplifica el mantenimiento y se evita la dispersión de valores
     mágicos por el código.
+
+    Las credenciales de los protocolos se leen desde variables de entorno
+    definidas en ``.env``. No se deben hardcodear secretos aquí.
 """
 
+import os
 from pathlib import Path
+
+from dotenv import load_dotenv
 
 # Ruta absoluta al directorio backend/ (directorio padre de app/).
 # Se calcula de forma dinámica para que el proyecto sea portable
 # independientemente del directorio de trabajo del proceso.
 _BACKEND_DIR = Path(__file__).resolve().parent.parent
+
+# Carga el archivo .env del directorio backend/ antes de leer variables.
+load_dotenv(_BACKEND_DIR / ".env")
 
 
 class Settings:
@@ -49,7 +58,7 @@ class Settings:
     # Configuración de CORS (Cross-Origin Resource Sharing)
     # En entornos de producción se deben restringir los orígenes permitidos
     # a los dominios específicos del frontend para mejorar la seguridad.
-    # El valor ["*"] es adecuado únicamente para desarrollo local.
+    # El valor ['*'] es adecuado únicamente para desarrollo local.
     # -------------------------------------------------------------------------
     CORS_ORIGINS: list[str] = ["*"]
 
@@ -68,18 +77,17 @@ class Settings:
     # inmutabilidad y consultas O(1).
     ALLOWED_EXTENSIONS: frozenset[str] = frozenset(
         {
-            ".jpg", ".jpeg", ".png", ".gif", ".webp",   # imágenes
-            ".pdf",                                      # documentos PDF
-            ".doc", ".docx",                             # documentos Word
-            ".txt", ".csv", ".xlsx", ".zip",             # datos y comprimidos
+            ".jpg", ".jpeg", ".png", ".gif", ".webp",
+            ".pdf",
+            ".doc", ".docx",
+            ".txt", ".csv", ".xlsx", ".zip",
         }
     )
 
     # Protocolos de almacenamiento soportados por la aplicación.
-    # Cualquier protocolo que no figure aquí será rechazado en la validación
-    # del endpoint de carga antes de llegar a la capa de almacenamiento.
+    # SFTP queda excluido de esta integración.
     SUPPORTED_PROTOCOLS: frozenset[str] = frozenset(
-        {"nfs", "ftp", "sftp", "s3", "smb"}
+        {"nfs", "ftp", "s3", "smb"}
     )
 
     # -------------------------------------------------------------------------
@@ -100,6 +108,41 @@ class Settings:
 
     # Directorio raíz donde cada protocolo tiene su subcarpeta de destino.
     UPLOAD_DIR: Path = _BACKEND_DIR / "uploads"
+
+    # -------------------------------------------------------------------------
+    # S3 / MinIO
+    # -------------------------------------------------------------------------
+    S3_ENDPOINT: str = os.getenv("MINIO_ENDPOINT", "192.168.56.102:9000")
+    S3_ACCESS_KEY: str = os.getenv("MINIO_ACCESS_KEY", "minio_admin")
+    S3_SECRET_KEY: str = os.getenv("MINIO_SECRET_KEY", "secret123")
+    S3_BUCKET: str = os.getenv("MINIO_BUCKET_NAME", "storage-s3")
+    S3_USE_SSL: bool = os.getenv("MINIO_USE_SSL", "False").lower() == "true"
+
+    # -------------------------------------------------------------------------
+    # FTP
+    # -------------------------------------------------------------------------
+    FTP_HOST: str = os.getenv("FTP_HOST", "192.168.56.102")
+    FTP_PORT: int = int(os.getenv("FTP_PORT", "21"))
+    FTP_USER: str = os.getenv("FTP_USER", "ftpuser")
+    FTP_PASS: str = os.getenv("FTP_PASS", "secret")
+    FTP_DIR: str = os.getenv("FTP_DIR", "/")
+
+    # -------------------------------------------------------------------------
+    # SMB
+    # -------------------------------------------------------------------------
+    SMB_HOST: str = os.getenv("SMB_HOST", "192.168.56.102")
+    SMB_USER: str = os.getenv("SMB_USER", "ftpuser")
+    SMB_PASS: str = os.getenv("SMB_PASS", "secret")
+    SMB_SHARE: str = os.getenv("SMB_SHARE", "smb")
+
+    # -------------------------------------------------------------------------
+    # NFS (accedido vía SSH; no requiere montaje local)
+    # -------------------------------------------------------------------------
+    NFS_HOST: str = os.getenv("NFS_HOST", "192.168.56.102")
+    NFS_SSH_PORT: int = int(os.getenv("NFS_SSH_PORT", "22"))
+    NFS_USER: str = os.getenv("NFS_USER", "ftpuser")
+    NFS_PASS: str = os.getenv("NFS_PASS", "secret")
+    NFS_DIR: str = os.getenv("NFS_DIR", "/mnt/prueba/nfs")
 
 
 # Singleton del módulo — debe importarse en lugar de la clase directamente.

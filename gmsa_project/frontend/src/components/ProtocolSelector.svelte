@@ -61,13 +61,6 @@
       accent: 'proto--ftp',
     },
     {
-      key: 'sftp',
-      label: 'SFTP',
-      icon: 'bi-shield-lock-fill',
-      desc: 'Transferencia segura sobre SSH, ideal para entornos con autenticación protegida.',
-      accent: 'proto--sftp',
-    },
-    {
       key: 's3',
       label: 'S3 / MinIO',
       icon: 'bi-cloud-arrow-up-fill',
