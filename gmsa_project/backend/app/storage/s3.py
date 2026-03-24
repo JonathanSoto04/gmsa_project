@@ -18,7 +18,7 @@ import boto3
 from botocore.client import Config
 
 from app.config import settings
-from app.storage.base import StorageHandler
+from app.storage.base import StorageCredentials, StorageHandler
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,12 @@ class S3StorageHandler(StorageHandler):
             region_name="us-east-1",
         )
 
-    def save(self, temp_path: Path, filename: str) -> str:
+    def save(
+        self,
+        temp_path: Path,
+        filename: str,
+        credentials: StorageCredentials | None = None,
+    ) -> str:
         content_type, _ = mimetypes.guess_type(filename)
         content_type = content_type or "application/octet-stream"
 

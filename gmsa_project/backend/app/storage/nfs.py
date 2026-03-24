@@ -20,7 +20,7 @@ from pathlib import Path
 import paramiko
 
 from app.config import settings
-from app.storage.base import StorageHandler
+from app.storage.base import StorageCredentials, StorageHandler
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +40,12 @@ class NFSStorageHandler(StorageHandler):
         )
         return ssh
 
-    def save(self, temp_path: Path, filename: str) -> str:
+    def save(
+        self,
+        temp_path: Path,
+        filename: str,
+        credentials: StorageCredentials | None = None,
+    ) -> str:
         ssh = None
         try:
             ssh = self._get_ssh_client()

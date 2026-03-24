@@ -34,7 +34,7 @@ import shutil
 from pathlib import Path
 
 from app.config import settings
-from app.storage.base import StorageHandler
+from app.storage.base import StorageCredentials, StorageHandler
 
 # Logger con el nombre del módulo para facilitar la trazabilidad.
 logger = logging.getLogger(__name__)
@@ -60,7 +60,12 @@ class LocalStorageHandler(StorageHandler):
         self._dest: Path = settings.UPLOAD_DIR / subfolder
         self._dest.mkdir(parents=True, exist_ok=True)
 
-    def save(self, temp_path: Path, filename: str) -> str:
+    def save(
+        self,
+        temp_path: Path,
+        filename: str,
+        credentials: StorageCredentials | None = None,
+    ) -> str:
         """
         Copia el archivo temporal al directorio de destino del protocolo simulado.
 

@@ -15,7 +15,7 @@ from ftplib import FTP
 from pathlib import Path
 
 from app.config import settings
-from app.storage.base import StorageHandler
+from app.storage.base import StorageCredentials, StorageHandler
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,12 @@ class FTPStorageHandler(StorageHandler):
         ftp.cwd(settings.FTP_DIR)
         return ftp
 
-    def save(self, temp_path: Path, filename: str) -> str:
+    def save(
+        self,
+        temp_path: Path,
+        filename: str,
+        credentials: StorageCredentials | None = None,
+    ) -> str:
         ftp = None
         try:
             ftp = self._get_client()

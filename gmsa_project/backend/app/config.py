@@ -134,6 +134,8 @@ class Settings:
     SMB_USER: str = os.getenv("SMB_USER", "ftpuser")
     SMB_PASS: str = os.getenv("SMB_PASS", "secret")
     SMB_SHARE: str = os.getenv("SMB_SHARE", "smb")
+    SMB_DIR: str = os.getenv("SMB_DIR", "/")
+    SMB_DOMAIN: str = os.getenv("SMB_DOMAIN", "")
 
     # -------------------------------------------------------------------------
     # NFS (accedido vía SSH; no requiere montaje local)
