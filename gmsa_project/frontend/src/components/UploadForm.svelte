@@ -183,7 +183,7 @@
 
   <!-- Campos de credenciales: usuario y contraseña -->
   <div class="row g-3 mb-4">
-    <div class="col-md-6">
+    <!-- <div class="col-md-6">
       <label class="form-label field-label">
         <i class="bi bi-person-fill me-1"></i> Usuario
       </label>
@@ -206,7 +206,7 @@
         placeholder="Contraseña de acceso"
         autocomplete="current-password"
       />
-    </div>
+    </div> -->
   </div>
 
   <!-- Selector de archivo con indicación de formatos y tamaño máximo -->

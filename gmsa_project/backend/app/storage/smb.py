@@ -136,6 +136,8 @@ class SMBStorageHandler(StorageHandler):
         safe_name = self._validate_filename(filename)
         resolved_credentials = self._resolve_credentials(credentials)
         remote_path = self._build_remote_path(safe_name)
+
+        # Leer contenido completo ANTES de abrir la sesión SMB
         contents = temp_path.read_bytes()
 
         try:
@@ -153,10 +155,7 @@ class SMBStorageHandler(StorageHandler):
         except Exception as exc:
             logger.exception(
                 "SMB write failed for '%s' on %s (%s: %r)",
-                safe_name,
-                remote_path,
-                type(exc).__name__,
-                exc,
+                safe_name, remote_path, type(exc).__name__, exc,
             )
             raise self._map_smb_error(
                 exc,
