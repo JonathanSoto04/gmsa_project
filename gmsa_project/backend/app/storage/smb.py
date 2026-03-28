@@ -3,10 +3,9 @@ storage/smb.py
 --------------
 StorageHandler para SMB (Samba / Windows Share / TrueNAS).
 
-Usa credenciales del request cuando se proporcionan y, si no existen,
-recurre a la configuracion del entorno. Ademas valida la ruta remota,
-registra eventos relevantes y traduce errores SMB comunes a excepciones
-de dominio mas claras.
+Mantiene una sola implementacion consistente para autenticacion, validacion
+de ruta y escritura remota. Tambien traduce los errores SMB mas comunes a
+mensajes de dominio que la capa de servicios puede devolver al cliente.
 """
 
 from __future__ import annotations
@@ -56,12 +55,14 @@ class SMBStorageHandler(StorageHandler):
             require_secure_negotiate=False,
         )
         smbclient.reset_connection_cache()
+
         logger.info(
             "SMB connect host=%s share=%s user=%s",
             settings.SMB_HOST,
             settings.SMB_SHARE,
             credentials.username,
         )
+
         smbclient.register_session(
             settings.SMB_HOST,
             username=credentials.username,
@@ -82,18 +83,20 @@ class SMBStorageHandler(StorageHandler):
 
         return safe_name
 
-    def _build_remote_paths(self, filename: str) -> tuple[str, str]:
+    def _build_remote_paths(self, filename: str) -> tuple[str, str, str]:
+        host = settings.SMB_HOST.strip()
         share = settings.SMB_SHARE.strip().strip("/\\")
-        if not settings.SMB_HOST.strip():
+
+        if not host:
             raise StorageConfigurationError("SMB_HOST no esta configurado.")
         if not share:
             raise StorageConfigurationError("SMB_SHARE no esta configurado.")
 
         relative_dir = str(PurePosixPath("/", settings.SMB_DIR.strip() or "/")).strip("/")
-        share_root = f"//{settings.SMB_HOST}/{share}"
+        share_root = f"//{host}/{share}"
         remote_dir = f"{share_root}/{relative_dir}" if relative_dir else share_root
         remote_path = f"{remote_dir}/{filename}" if relative_dir else f"{share_root}/{filename}"
-        return remote_dir, remote_path
+        return share_root, remote_dir, remote_path
 
     def _ensure_remote_directory(self, share_root: str, remote_dir: str) -> None:
         if remote_dir == share_root:
@@ -120,11 +123,18 @@ class SMBStorageHandler(StorageHandler):
             return StorageAuthenticationError(
                 "Autenticacion SMB rechazada. Verifica usuario, contrasena y dominio."
             )
+
         if "STATUS_ACCESS_DENIED" in text:
+            if settings.SMB_DIR.strip() in {"", "/"}:
+                return StoragePermissionError(
+                    "SMB autentico la sesion, pero el servidor rechazo escritura en la raiz del share. "
+                    "Configura SMB_DIR con una subcarpeta writable del recurso compartido."
+                )
             return StoragePermissionError(
                 "SMB autentico la sesion pero el usuario no tiene permisos de escritura "
                 f"sobre el share '{settings.SMB_SHARE}' o la carpeta '{settings.SMB_DIR}'."
             )
+
         if (
             "STATUS_BAD_NETWORK_NAME" in text
             or "STATUS_OBJECT_PATH_NOT_FOUND" in text
@@ -135,11 +145,13 @@ class SMBStorageHandler(StorageHandler):
                 "La ruta SMB no existe o no es accesible. "
                 f"Revisa SMB_SHARE='{settings.SMB_SHARE}' y SMB_DIR='{settings.SMB_DIR}'."
             )
+
         if "SIGNING" in text or "NEGOTIATE" in text or "DIALECT" in text:
             return StorageConfigurationError(
                 "La negociacion SMB fue rechazada por el servidor. "
                 "Es posible que el servidor requiera signing, secure negotiate o una politica SMB distinta."
             )
+
         return StorageConfigurationError(default_message)
 
     def save(
@@ -150,8 +162,7 @@ class SMBStorageHandler(StorageHandler):
     ) -> str:
         safe_name = self._validate_filename(filename)
         resolved_credentials = self._resolve_credentials(credentials)
-        remote_dir, remote_path = self._build_remote_paths(safe_name)
-        share_root = f"//{settings.SMB_HOST}/{settings.SMB_SHARE.strip().strip('/\\')}"
+        share_root, remote_dir, remote_path = self._build_remote_paths(safe_name)
 
         try:
             self._register_session(resolved_credentials)
@@ -160,11 +171,11 @@ class SMBStorageHandler(StorageHandler):
             logger.info("SMB write start path=%s", remote_path)
             with smbclient.open_file(remote_path, mode="wb") as remote_file:
                 with open(temp_path, "rb") as local_file:
-                    while chunk := local_file.read(1024 * 1024):
-                        remote_file.write(chunk)
+                    while chunk := local_file.read(1024 * 1024):+remote_file.write(chunk)
 
             logger.info("SMB write OK '%s' -> %s", safe_name, remote_path)
             return remote_path
+
         except (StorageAuthenticationError, StorageConfigurationError, StoragePathError, StoragePermissionError):
             raise
         except Exception as exc:
@@ -175,8 +186,7 @@ class SMBStorageHandler(StorageHandler):
                 type(exc).__name__,
                 exc,
             )
-            mapped = self._map_smb_error(
+            raise self._map_smb_error(
                 exc,
                 default_message=f"Error SMB no controlado al escribir '{safe_name}' en '{remote_path}'.",
-            )
-            raise mapped from exc
+            ) from exc
