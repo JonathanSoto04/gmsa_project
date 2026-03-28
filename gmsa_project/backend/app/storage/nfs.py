@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from pathlib import Path
 
 import paramiko
@@ -21,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 class NFSStorageHandler(StorageHandler):
-    """Sube y elimina archivos en el directorio NFS remoto."""
+    """Sube, lista y elimina archivos en el directorio NFS remoto."""
 
     def _get_ssh_client(self) -> paramiko.SSHClient:
         ssh = paramiko.SSHClient()
@@ -103,6 +104,47 @@ class NFSStorageHandler(StorageHandler):
             if ssh:
                 ssh.close()
 
+    def list_files(
+        self,
+        credentials: StorageCredentials | None = None,
+    ) -> list[dict]:
+        ssh = None
+        sftp = None
+
+        try:
+            ssh = self._get_ssh_client()
+            sftp = ssh.open_sftp()
+            entries = []
+
+            for entry in sftp.listdir_attr(settings.NFS_DIR):
+                if not self._is_regular_file(entry.st_mode):
+                    continue
+
+                modified = datetime.fromtimestamp(entry.st_mtime).isoformat(timespec="seconds")
+                entries.append(
+                    {
+                        "name": entry.filename,
+                        "protocol": "nfs",
+                        "size": int(entry.st_size),
+                        "path": f"nfs://{settings.NFS_HOST}{settings.NFS_DIR.rstrip('/')}/{entry.filename}",
+                        "created_at": modified,
+                        "modified_at": modified,
+                    }
+                )
+
+            return sorted(entries, key=lambda item: item["modified_at"], reverse=True)
+        except paramiko.AuthenticationException as exc:
+            raise StorageAuthenticationError(
+                "Autenticacion NFS/SSH rechazada. Verifica las credenciales configuradas."
+            ) from exc
+        except (OSError, paramiko.SSHException) as exc:
+            raise StorageConfigurationError(f"Error NFS al listar archivos: {exc}") from exc
+        finally:
+            if sftp:
+                sftp.close()
+            if ssh:
+                ssh.close()
+
     def _validate_filename(self, filename: str) -> str:
         safe_name = Path(filename).name
         if not safe_name or safe_name != filename or safe_name in {".", ".."}:
@@ -110,3 +152,6 @@ class NFSStorageHandler(StorageHandler):
                 "El nombre del archivo NFS es invalido. No se permiten rutas embebidas ni '..'."
             )
         return safe_name
+
+    def _is_regular_file(self, mode: int) -> bool:
+        return (mode & 0o170000) == 0o100000

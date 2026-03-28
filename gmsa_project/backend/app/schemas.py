@@ -48,6 +48,7 @@ class StoredFileItem(BaseModel):
 class FilesListResponse(BaseModel):
     total: int
     items: list[StoredFileItem]
+    warnings: list[str] = []
 
 
 class DeleteFileRequest(BaseModel):

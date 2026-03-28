@@ -56,3 +56,11 @@ class StorageHandler(ABC):
     ) -> None:
         """Elimina ``filename`` del destino del protocolo."""
         ...
+
+    @abstractmethod
+    def list_files(
+        self,
+        credentials: StorageCredentials | None = None,
+    ) -> list[dict]:
+        """Lista los archivos disponibles en el destino del protocolo."""
+        ...

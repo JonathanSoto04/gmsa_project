@@ -4,6 +4,13 @@ from fastapi import APIRouter, HTTPException, Query
 
 from app.schemas import DeleteFileRequest, DeleteFileResponse, FilesListResponse
 from app.services.files_service import delete_file, list_files
+from app.storage.base import (
+    StorageAuthenticationError,
+    StorageConfigurationError,
+    StorageError,
+    StoragePathError,
+    StoragePermissionError,
+)
 
 router = APIRouter(prefix="/files", tags=["Files"])
 
@@ -16,11 +23,21 @@ def get_files(
     )
 ) -> FilesListResponse:
     try:
-        items = list_files(protocol)
+        result = list_files(protocol)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except StorageAuthenticationError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    except StoragePermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except (StoragePathError, StorageConfigurationError, StorageError) as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
-    return FilesListResponse(total=len(items), items=items)
+    return FilesListResponse(
+        total=len(result["items"]),
+        items=result["items"],
+        warnings=result["warnings"],
+    )
 
 
 @router.delete("", response_model=DeleteFileResponse, summary="Eliminar archivo almacenado")

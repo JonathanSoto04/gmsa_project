@@ -38,3 +38,25 @@ class LocalStorageHandler(StorageHandler):
         destination = self._dest / Path(filename).name
         destination.unlink(missing_ok=True)
         logger.info("LocalStorage delete OK '%s' -> %s", filename, destination)
+
+    def list_files(
+        self,
+        credentials: StorageCredentials | None = None,
+    ) -> list[dict]:
+        items = []
+        for candidate in self._dest.iterdir():
+            if not candidate.is_file():
+                continue
+
+            stat = candidate.stat()
+            items.append(
+                {
+                    "name": candidate.name,
+                    "protocol": self._dest.name,
+                    "size": int(stat.st_size),
+                    "path": str(candidate.resolve()),
+                    "created_at": "",
+                    "modified_at": "",
+                }
+            )
+        return items

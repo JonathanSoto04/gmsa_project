@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 class S3StorageHandler(StorageHandler):
-    """Sube y elimina archivos en un bucket S3 / MinIO."""
+    """Sube, lista y elimina archivos en un bucket S3 / MinIO."""
 
     def _get_client(self):
         scheme = "https" if settings.S3_USE_SSL else "http"
@@ -71,6 +71,34 @@ class S3StorageHandler(StorageHandler):
             logger.info("S3Storage delete OK '%s' from bucket %s", safe_name, settings.S3_BUCKET)
         except (ClientError, BotoCoreError) as exc:
             raise StorageConfigurationError(f"Error S3 al eliminar '{safe_name}': {exc}") from exc
+
+    def list_files(
+        self,
+        credentials: StorageCredentials | None = None,
+    ) -> list[dict]:
+        try:
+            s3 = self._get_client()
+            response = s3.list_objects_v2(Bucket=settings.S3_BUCKET)
+            items = []
+
+            for entry in response.get("Contents", []):
+                key = entry["Key"]
+                safe_name = self._validate_filename(key)
+                modified = entry["LastModified"].replace(tzinfo=None).isoformat(timespec="seconds")
+                items.append(
+                    {
+                        "name": safe_name,
+                        "protocol": "s3",
+                        "size": int(entry.get("Size", 0)),
+                        "path": f"s3://{settings.S3_BUCKET}/{safe_name}",
+                        "created_at": modified,
+                        "modified_at": modified,
+                    }
+                )
+
+            return sorted(items, key=lambda item: item["modified_at"], reverse=True)
+        except (ClientError, BotoCoreError) as exc:
+            raise StorageConfigurationError(f"Error S3 al listar archivos: {exc}") from exc
 
     def _validate_filename(self, filename: str) -> str:
         safe_name = Path(filename).name

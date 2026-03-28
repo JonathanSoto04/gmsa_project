@@ -18,6 +18,7 @@
   let protocol = $state('nfs')
   let history = $state([])
   let storedFiles = $state([])
+  let fileWarnings = $state([])
   let maxFileSizeMb = $state(10)
   let allowedExtensions = $state([])
   let supportedProtocols = $state([])
@@ -38,6 +39,7 @@
     supportedProtocols = config.supported_protocols ?? []
     history = hist.items ?? []
     storedFiles = files.items ?? []
+    fileWarnings = files.warnings ?? []
   })
 
   async function reloadStoredFiles() {
@@ -45,6 +47,8 @@
 
     const files = await fetchStoredFiles()
     storedFiles = files.items ?? []
+    fileWarnings = files.warnings ?? []
+    return files
   }
 
   async function handleUploadSuccess(record) {
@@ -128,6 +132,7 @@
         <FilesManager
           files={storedFiles}
           supportedProtocols={supportedProtocols}
+          initialWarnings={fileWarnings}
           ondeleted={handleFileDeleted}
           onrefresh={reloadStoredFiles}
         />

@@ -4,6 +4,7 @@
   let {
     files = [],
     supportedProtocols = [],
+    initialWarnings = [],
     ondeleted,
     onrefresh,
   } = $props()
@@ -14,6 +15,7 @@
   let successMsg = $state('')
   let warningMsg = $state('')
   let errorMsg = $state('')
+  let listWarningMsg = $state('')
 
   let protocolOptions = $derived(
     supportedProtocols.length > 0 ? supportedProtocols : ['ftp', 'nfs', 's3', 'smb']
@@ -24,6 +26,12 @@
       ? files
       : files.filter((item) => item.protocol === selectedProtocol)
   )
+
+  $effect(() => {
+    if (!refreshing && !warningMsg && !errorMsg) {
+      listWarningMsg = initialWarnings.join(' | ')
+    }
+  })
 
   function formatSize(bytes) {
     if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
@@ -53,9 +61,11 @@
     successMsg = ''
     warningMsg = ''
     errorMsg = ''
+    listWarningMsg = ''
 
     try {
-      await onrefresh()
+      const result = await onrefresh()
+      listWarningMsg = result?.warnings?.join(' | ') ?? ''
     } catch (error) {
       errorMsg = error?.message ?? 'No se pudo actualizar la lista de archivos.'
     } finally {
@@ -74,17 +84,21 @@
     successMsg = ''
     warningMsg = ''
     errorMsg = ''
+    listWarningMsg = ''
 
     try {
       const response = await deleteStoredFile(item.protocol, item.name)
+
       if (response.remote_deleted === false) {
         warningMsg = response.warning
           ? `${response.message} Detalle: ${response.warning}`
           : response.message
+        const refreshResult = await onrefresh?.()
+        listWarningMsg = refreshResult?.warnings?.join(' | ') ?? ''
       } else {
         successMsg = response.message ?? 'Archivo eliminado correctamente.'
+        ondeleted?.(response.deleted ?? item)
       }
-      ondeleted?.(response.deleted ?? item)
     } catch (error) {
       errorMsg = error?.message ?? 'No se pudo eliminar el archivo.'
     } finally {
@@ -98,7 +112,7 @@
     <div>
       <div class="section-title">Archivos almacenados</div>
       <div class="section-subtitle">
-        Inventario local por protocolo con eliminacion fisica en el backend
+        Archivos reales consultados desde cada protocolo remoto
       </div>
     </div>
 
@@ -153,6 +167,13 @@
     </div>
   {/if}
 
+  {#if listWarningMsg}
+    <div class="alert-box alert-box--warning mb-3">
+      <i class="bi bi-wifi-off"></i>
+      <span>{listWarningMsg}</span>
+    </div>
+  {/if}
+
   {#if errorMsg}
     <div class="alert-box alert-box--error mb-3">
       <i class="bi bi-exclamation-triangle-fill"></i>
@@ -167,8 +188,7 @@
       </div>
       <div class="empty-state-title">Sin archivos en esta vista</div>
       <div class="empty-state-desc">
-        Cuando existan archivos en <code>backend/uploads/&lt;protocolo&gt;</code>,
-        apareceran aqui para administrarlos.
+        Si el protocolo remoto tiene archivos accesibles, apareceran aqui para administrarlos.
       </div>
     </div>
   {:else}
@@ -179,17 +199,17 @@
             <th>Archivo</th>
             <th>Protocolo</th>
             <th>Tamano</th>
-            <th>Ruta relativa</th>
+            <th>Ruta remota</th>
             <th>Modificado</th>
             <th class="text-end">Accion</th>
           </tr>
         </thead>
         <tbody>
-          {#each visibleFiles as item (item.path)}
+          {#each visibleFiles as item (item.protocol + ':' + item.name)}
             <tr>
               <td>
                 <div class="file-name">{item.name}</div>
-                <div class="file-date">Creado: {formatDate(item.created_at)}</div>
+                <div class="file-date">Referencia remota</div>
               </td>
               <td>
                 <span class="proto-badge">{item.protocol.toUpperCase()}</span>

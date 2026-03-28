@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from pathlib import Path
 
 import smbclient
@@ -22,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 class SMBStorageHandler(StorageHandler):
-    """Sube y elimina archivos en un share SMB."""
+    """Sube, lista y elimina archivos en un share SMB."""
 
     def _resolve_credentials(self, credentials: StorageCredentials | None) -> StorageCredentials:
         username = settings.SMB_USER
@@ -160,4 +161,41 @@ class SMBStorageHandler(StorageHandler):
             raise self._map_smb_error(
                 exc,
                 default_message=f"Error SMB no controlado al eliminar '{safe_name}' en '{remote_path}'.",
+            ) from exc
+
+    def list_files(
+        self,
+        credentials: StorageCredentials | None = None,
+    ) -> list[dict]:
+        resolved_credentials = self._resolve_credentials(credentials)
+        share_root = self._build_remote_path("")
+        items: list[dict] = []
+
+        try:
+            self._register_session(resolved_credentials)
+            for entry in smbclient.scandir(share_root):
+                if not entry.is_file():
+                    continue
+
+                stat_result = entry.stat()
+                modified = datetime.fromtimestamp(stat_result.st_mtime).isoformat(timespec="seconds")
+                items.append(
+                    {
+                        "name": entry.name,
+                        "protocol": "smb",
+                        "size": int(stat_result.st_size),
+                        "path": self._build_remote_path(entry.name),
+                        "created_at": modified,
+                        "modified_at": modified,
+                    }
+                )
+
+            return sorted(items, key=lambda item: item["modified_at"], reverse=True)
+        except (StorageAuthenticationError, StorageConfigurationError, StoragePathError, StoragePermissionError):
+            raise
+        except Exception as exc:
+            logger.exception("SMB list failed on %s (%s: %r)", share_root, type(exc).__name__, exc)
+            raise self._map_smb_error(
+                exc,
+                default_message=f"Error SMB no controlado al listar archivos en '{share_root}'.",
             ) from exc

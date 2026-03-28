@@ -1,4 +1,4 @@
-"""Servicios para listar, copiar y eliminar archivos locales por protocolo."""
+"""Servicios para listar, copiar y eliminar archivos por protocolo."""
 
 from __future__ import annotations
 
@@ -14,68 +14,64 @@ from app.storage.registry import get_handler
 logger = logging.getLogger(__name__)
 
 
-def list_files(protocol: str | None = None) -> list[dict]:
-    """Lista archivos del directorio local uploads/<protocolo>."""
+def list_files(protocol: str | None = None) -> dict:
+    """Lista archivos remotos por protocolo y agrega advertencias por fallos parciales."""
     items: list[dict] = []
+    warnings: list[str] = []
+    protocols = _resolve_protocols(protocol)
 
-    for protocol_name in _resolve_protocols(protocol):
-        directory = settings.get_protocol_upload_dir(protocol_name)
+    for protocol_name in protocols:
+        try:
+            handler = get_handler(protocol_name)
+            protocol_items = handler.list_files()
+            items.extend(protocol_items)
+        except StorageError as exc:
+            if protocol:
+                raise
+            warnings.append(f"{protocol_name.upper()}: {exc}")
+            logger.warning("Remote list failed for %s: %s", protocol_name.upper(), exc)
 
-        for candidate in directory.iterdir():
-            if not candidate.is_file():
-                continue
-
-            stat = candidate.stat()
-            items.append(
-                {
-                    "name": candidate.name,
-                    "protocol": protocol_name,
-                    "size": stat.st_size,
-                    "path": candidate.relative_to(settings.UPLOAD_DIR).as_posix(),
-                    "created_at": _format_timestamp(stat.st_ctime),
-                    "modified_at": _format_timestamp(stat.st_mtime),
-                    "_sort_ts": stat.st_mtime,
-                }
-            )
-
-    items.sort(key=lambda item: item["_sort_ts"], reverse=True)
-    for item in items:
-        item.pop("_sort_ts", None)
-
-    return items
+    items.sort(key=lambda item: item["modified_at"], reverse=True)
+    return {"items": items, "warnings": warnings}
 
 
 def delete_file(*, protocol: str, filename: str) -> dict:
-    """Elimina la copia local y reporta si el borrado remoto tambien se completo."""
+    """Elimina el archivo remoto y limpia la copia local si existe."""
     safe_protocol = _validate_protocol(protocol)
-    file_path = _resolve_file_path(protocol=safe_protocol, filename=filename)
+    safe_name = _validate_filename(filename)
 
-    if not file_path.exists() or not file_path.is_file():
+    remote_metadata = _find_remote_file(protocol=safe_protocol, filename=safe_name)
+    local_path = _resolve_file_path(protocol=safe_protocol, filename=safe_name)
+    local_exists = local_path.exists() and local_path.is_file()
+
+    if remote_metadata is None and not local_exists:
         raise FileNotFoundError(
-            f"El archivo '{filename}' no existe en el protocolo '{safe_protocol}'."
+            f"El archivo '{safe_name}' no existe en el protocolo '{safe_protocol}'."
         )
 
-    metadata = _build_item(protocol=safe_protocol, file_path=file_path)
+    deleted_item = remote_metadata or _build_local_item(protocol=safe_protocol, file_path=local_path)
     remote_deleted = True
     warning = None
 
     try:
-        _delete_remote_file(protocol=safe_protocol, filename=file_path.name)
+        _delete_remote_file(protocol=safe_protocol, filename=safe_name)
     except StorageError as exc:
         remote_deleted = False
         warning = str(exc)
         logger.warning(
             "Remote delete failed for '%s' via %s: %s",
-            file_path.name,
+            safe_name,
             safe_protocol.upper(),
             exc,
         )
 
-    file_path.unlink()
+    if local_exists:
+        local_path.unlink()
+
     return {
-        "deleted": metadata,
+        "deleted": deleted_item,
         "remote_deleted": remote_deleted,
-        "local_deleted": True,
+        "local_deleted": local_exists,
         "warning": warning,
     }
 
@@ -145,15 +141,22 @@ def _resolve_file_path(*, protocol: str, filename: str | None) -> Path:
     return file_path
 
 
-def _build_item(*, protocol: str, file_path: Path) -> dict:
-    stat = file_path.stat()
+def _build_local_item(*, protocol: str, file_path: Path) -> dict:
+    timestamp = _format_timestamp(datetime.now().timestamp())
+    if file_path.exists() and file_path.is_file():
+        stat = file_path.stat()
+        timestamp = _format_timestamp(stat.st_mtime)
+        size = int(stat.st_size)
+    else:
+        size = 0
+
     return {
         "name": file_path.name,
         "protocol": protocol,
-        "size": stat.st_size,
-        "path": file_path.relative_to(settings.UPLOAD_DIR.resolve()).as_posix(),
-        "created_at": _format_timestamp(stat.st_ctime),
-        "modified_at": _format_timestamp(stat.st_mtime),
+        "size": size,
+        "path": f"{protocol}://desconocido/{file_path.name}",
+        "created_at": timestamp,
+        "modified_at": timestamp,
     }
 
 
@@ -164,3 +167,11 @@ def _format_timestamp(timestamp: float) -> str:
 def _delete_remote_file(*, protocol: str, filename: str) -> None:
     handler = get_handler(protocol)
     handler.delete(filename)
+
+
+def _find_remote_file(*, protocol: str, filename: str) -> dict | None:
+    handler = get_handler(protocol)
+    for item in handler.list_files():
+        if item["name"] == filename:
+            return item
+    return None
