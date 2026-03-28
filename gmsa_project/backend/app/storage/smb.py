@@ -95,7 +95,11 @@ class SMBStorageHandler(StorageHandler):
         remote_path = f"{remote_dir}/{filename}" if relative_dir else f"{share_root}/{filename}"
         return remote_dir, remote_path
 
-    def _ensure_remote_directory(self, remote_dir: str) -> None:
+    def _ensure_remote_directory(self, share_root: str, remote_dir: str) -> None:
+        if remote_dir == share_root:
+            logger.debug("SMB remote dir points to share root; se omite makedirs(%s).", remote_dir)
+            return
+
         try:
             smbclient.makedirs(remote_dir, exist_ok=True)
         except AttributeError:
@@ -131,6 +135,11 @@ class SMBStorageHandler(StorageHandler):
                 "La ruta SMB no existe o no es accesible. "
                 f"Revisa SMB_SHARE='{settings.SMB_SHARE}' y SMB_DIR='{settings.SMB_DIR}'."
             )
+        if "SIGNING" in text or "NEGOTIATE" in text or "DIALECT" in text:
+            return StorageConfigurationError(
+                "La negociacion SMB fue rechazada por el servidor. "
+                "Es posible que el servidor requiera signing, secure negotiate o una politica SMB distinta."
+            )
         return StorageConfigurationError(default_message)
 
     def save(
@@ -142,10 +151,11 @@ class SMBStorageHandler(StorageHandler):
         safe_name = self._validate_filename(filename)
         resolved_credentials = self._resolve_credentials(credentials)
         remote_dir, remote_path = self._build_remote_paths(safe_name)
+        share_root = f"//{settings.SMB_HOST}/{settings.SMB_SHARE.strip().strip('/\\')}"
 
         try:
             self._register_session(resolved_credentials)
-            self._ensure_remote_directory(remote_dir)
+            self._ensure_remote_directory(share_root, remote_dir)
 
             logger.info("SMB write start path=%s", remote_path)
             with smbclient.open_file(remote_path, mode="wb") as remote_file:
@@ -155,8 +165,16 @@ class SMBStorageHandler(StorageHandler):
 
             logger.info("SMB write OK '%s' -> %s", safe_name, remote_path)
             return remote_path
+        except (StorageAuthenticationError, StorageConfigurationError, StoragePathError, StoragePermissionError):
+            raise
         except Exception as exc:
-            logger.exception("SMB write failed for '%s' on %s", safe_name, remote_path)
+            logger.exception(
+                "SMB write failed for '%s' on %s (%s: %r)",
+                safe_name,
+                remote_path,
+                type(exc).__name__,
+                exc,
+            )
             mapped = self._map_smb_error(
                 exc,
                 default_message=f"Error SMB no controlado al escribir '{safe_name}' en '{remote_path}'.",
