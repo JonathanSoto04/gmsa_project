@@ -131,7 +131,7 @@ class Settings:
     # SMB
     # -------------------------------------------------------------------------
     SMB_HOST: str = os.getenv("SMB_HOST", "192.168.56.102")
-    SMB_USER: str = os.getenv("SMB_USER", "ftpuser")
+    SMB_USER: str = os.getenv("SMB_USER", "ftp_user")
     SMB_PASS: str = os.getenv("SMB_PASS", "secret")
     SMB_SHARE: str = os.getenv("SMB_SHARE", "smb")
     SMB_DIR: str = os.getenv("SMB_DIR", "/")

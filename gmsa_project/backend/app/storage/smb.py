@@ -33,12 +33,12 @@ class SMBStorageHandler(StorageHandler):
     """Sube archivos a un share SMB."""
 
     def _resolve_credentials(self, credentials: StorageCredentials | None) -> StorageCredentials:
-        username = credentials.username.strip() if credentials and credentials.username else settings.SMB_USER
-        password = credentials.password if credentials and credentials.password else settings.SMB_PASS
+        username = settings.SMB_USER
+        password = settings.SMB_PASS
 
         if not username or not password:
             raise StorageConfigurationError(
-                "SMB requiere credenciales validas. Define SMB_USER/SMB_PASS o envialas en el request."
+                "SMB requiere credenciales validas en la configuracion. Define SMB_USER/SMB_PASS en .env."
             )
 
         domain = settings.SMB_DOMAIN.strip()
