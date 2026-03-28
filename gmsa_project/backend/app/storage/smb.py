@@ -136,15 +136,14 @@ class SMBStorageHandler(StorageHandler):
         safe_name = self._validate_filename(filename)
         resolved_credentials = self._resolve_credentials(credentials)
         remote_path = self._build_remote_path(safe_name)
+        contents = temp_path.read_bytes()
 
         try:
             self._register_session(resolved_credentials)
 
             logger.info("SMB write start path=%s", remote_path)
             with smbclient.open_file(remote_path, mode="wb") as remote_file:
-                with open(temp_path, "rb") as local_file:
-                    while chunk := local_file.read(1024 * 1024):
-                        remote_file.write(chunk)
+                remote_file.write(contents)
 
             logger.info("SMB write OK '%s' -> %s", safe_name, remote_path)
             return remote_path

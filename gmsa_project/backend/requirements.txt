@@ -5,5 +5,5 @@ python-multipart==0.0.20
 # Protocol dependencies
 boto3==1.38.0
 paramiko==3.5.1
-smbprotocol==1.15.0
+smbprotocol==1.16.0
 python-dotenv==1.1.0
