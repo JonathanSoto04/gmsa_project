@@ -570,6 +570,12 @@ body::before {
   color: #f87171;
 }
 
+.alert-box--warning {
+  background: var(--warning-dim);
+  border: 1px solid rgba(245, 158, 11, 0.22);
+  color: #fbbf24;
+}
+
 /* --------------------------------------------------------------------------
    13. History panel
    -------------------------------------------------------------------------- */
@@ -622,6 +628,28 @@ body::before {
 
 .btn-clear:disabled { opacity: 0.5; cursor: not-allowed; }
 
+.btn-refresh {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  cursor: pointer;
+  transition: background var(--ease), transform var(--ease), border-color var(--ease);
+}
+
+.btn-refresh:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(122, 176, 255, 0.22);
+  transform: translateY(-1px);
+}
+
+.btn-refresh:disabled { opacity: 0.6; cursor: not-allowed; }
+
 /* Table */
 .table-shell {
   flex: 1;
@@ -633,6 +661,10 @@ body::before {
 
 .table-shell::-webkit-scrollbar { width: 5px; }
 .table-shell::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 4px; }
+
+.table-shell--files {
+  max-height: 460px;
+}
 
 .table-dark {
   --bs-table-bg:           transparent;
@@ -670,6 +702,15 @@ body::before {
 .text-muted-sm {
   color: var(--text-muted);
   font-size: 0.80rem;
+}
+
+.file-path {
+  color: #b8d4ff;
+  font-size: 0.76rem;
+  background: rgba(79, 140, 255, 0.10);
+  border: 1px solid rgba(79, 140, 255, 0.14);
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
 }
 
 /* Protocol badge */
@@ -728,6 +769,70 @@ body::before {
   color: rgba(125, 150, 184, 0.7);
   max-width: 240px;
   line-height: 1.55;
+}
+
+.files-manager {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.files-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.files-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.files-toolbar {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.files-filter {
+  width: min(320px, 100%);
+}
+
+.files-empty-state {
+  min-height: 240px;
+}
+
+.btn-delete-file {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 128px;
+  min-height: 38px;
+  padding: 0 14px;
+  background: var(--danger-dim);
+  border: 1px solid rgba(239, 68, 68, 0.20);
+  color: #fca5a5;
+  border-radius: var(--radius-md);
+  font-weight: 700;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: background var(--ease), transform var(--ease), border-color var(--ease);
+}
+
+.btn-delete-file:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.20);
+  border-color: rgba(248, 113, 113, 0.32);
+  transform: translateY(-1px);
+}
+
+.btn-delete-file:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
 }
 
 /* --------------------------------------------------------------------------

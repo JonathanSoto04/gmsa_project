@@ -1,10 +1,4 @@
-"""
-Archivo : storage/base.py
-Descripcion:
-    Define el contrato base para todos los manejadores de almacenamiento
-    y las excepciones controladas que la capa de servicios puede traducir
-    a respuestas HTTP mas claras.
-"""
+"""Contrato base y errores de la capa de almacenamiento."""
 
 from __future__ import annotations
 
@@ -51,7 +45,14 @@ class StorageHandler(ABC):
         filename: str,
         credentials: StorageCredentials | None = None,
     ) -> str:
-        """
-        Persiste ``temp_path`` en el destino del protocolo y retorna la ruta final.
-        """
+        """Persiste ``temp_path`` en el destino del protocolo y retorna la ruta final."""
+        ...
+
+    @abstractmethod
+    def delete(
+        self,
+        filename: str,
+        credentials: StorageCredentials | None = None,
+    ) -> None:
+        """Elimina ``filename`` del destino del protocolo."""
         ...

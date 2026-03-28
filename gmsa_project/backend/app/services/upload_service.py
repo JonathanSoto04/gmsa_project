@@ -1,10 +1,4 @@
-"""
-Archivo : services/upload_service.py
-Descripcion:
-    Orquesta la carga completa de archivos, incluyendo validaciones,
-    escritura temporal, invocacion del handler de almacenamiento y
-    persistencia del historial.
-"""
+"""Servicio principal de carga de archivos."""
 
 from __future__ import annotations
 
@@ -15,6 +9,7 @@ from pathlib import Path
 from fastapi import HTTPException, UploadFile
 
 from app.config import settings
+from app.services.files_service import delete_local_file_copy, store_local_file_copy
 from app.services.history_service import append_record, build_record
 from app.storage.base import (
     StorageAuthenticationError,
@@ -40,8 +35,15 @@ async def process_upload(
     _validate_extension(file.filename)
     temp_path, size_bytes = await _stream_to_temp(file)
     credentials = StorageCredentials(username=username.strip(), password=password)
+    local_copy_path: Path | None = None
 
     try:
+        local_copy_path = store_local_file_copy(
+            protocol=protocol,
+            temp_path=temp_path,
+            filename=file.filename,
+        )
+
         handler = get_handler(protocol)
         saved_path = handler.save(temp_path, file.filename, credentials)
 
@@ -65,21 +67,27 @@ async def process_upload(
         return record
 
     except HTTPException:
+        _rollback_local_copy(protocol=protocol, filename=file.filename, local_copy_path=local_copy_path)
         raise
     except StorageAuthenticationError as exc:
+        _rollback_local_copy(protocol=protocol, filename=file.filename, local_copy_path=local_copy_path)
         _record_error(file.filename, protocol, username, size_bytes)
         raise HTTPException(status_code=401, detail=str(exc))
     except StoragePermissionError as exc:
+        _rollback_local_copy(protocol=protocol, filename=file.filename, local_copy_path=local_copy_path)
         _record_error(file.filename, protocol, username, size_bytes)
         raise HTTPException(status_code=403, detail=str(exc))
     except (StoragePathError, StorageConfigurationError) as exc:
+        _rollback_local_copy(protocol=protocol, filename=file.filename, local_copy_path=local_copy_path)
         _record_error(file.filename, protocol, username, size_bytes)
         raise HTTPException(status_code=500, detail=str(exc))
     except StorageError as exc:
+        _rollback_local_copy(protocol=protocol, filename=file.filename, local_copy_path=local_copy_path)
         _record_error(file.filename, protocol, username, size_bytes)
         raise HTTPException(status_code=500, detail=f"Error de almacenamiento: {exc}")
     except Exception as exc:
         logger.exception("Storage failure for '%s' via %s", file.filename, protocol.upper())
+        _rollback_local_copy(protocol=protocol, filename=file.filename, local_copy_path=local_copy_path)
         _record_error(file.filename, protocol, username, size_bytes)
         raise HTTPException(
             status_code=500,
@@ -114,7 +122,7 @@ async def _stream_to_temp(file: UploadFile) -> tuple[Path, int]:
     size_bytes = 0
 
     try:
-        with open(temp_path, "wb") as buf:
+        with open(temp_path, "wb") as buffer:
             while chunk := await file.read(1024 * 1024):
                 size_bytes += len(chunk)
                 if size_bytes > settings.MAX_FILE_SIZE_BYTES:
@@ -123,7 +131,7 @@ async def _stream_to_temp(file: UploadFile) -> tuple[Path, int]:
                         status_code=422,
                         detail=f"El archivo supera el limite de {settings.MAX_FILE_SIZE_MB} MB.",
                     )
-                buf.write(chunk)
+                buffer.write(chunk)
     except HTTPException:
         raise
     except OSError as exc:
@@ -133,9 +141,15 @@ async def _stream_to_temp(file: UploadFile) -> tuple[Path, int]:
     return temp_path, size_bytes
 
 
-def _record_error(
-    filename: str, protocol: str, username: str, size_bytes: int
+def _rollback_local_copy(
+    *, protocol: str, filename: str | None, local_copy_path: Path | None
 ) -> None:
+    if local_copy_path is None or not filename:
+        return
+    delete_local_file_copy(protocol=protocol, filename=filename)
+
+
+def _record_error(filename: str, protocol: str, username: str, size_bytes: int) -> None:
     """Persiste un registro de fallo en el historial."""
     record = build_record(
         filename=filename,
