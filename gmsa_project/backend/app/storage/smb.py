@@ -11,7 +11,7 @@ mensajes de dominio que la capa de servicios puede devolver al cliente.
 from __future__ import annotations
 
 import logging
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 
 import smbclient
 import smbprotocol.connection
@@ -83,7 +83,7 @@ class SMBStorageHandler(StorageHandler):
 
         return safe_name
 
-    def _build_remote_paths(self, filename: str) -> tuple[str, str, str]:
+    def _build_remote_path(self, filename: str) -> str:
         host = settings.SMB_HOST.strip()
         share = settings.SMB_SHARE.strip().strip("/\\")
 
@@ -92,29 +92,7 @@ class SMBStorageHandler(StorageHandler):
         if not share:
             raise StorageConfigurationError("SMB_SHARE no esta configurado.")
 
-        relative_dir = str(PurePosixPath("/", settings.SMB_DIR.strip() or "/")).strip("/")
-        share_root = f"//{host}/{share}"
-        remote_dir = f"{share_root}/{relative_dir}" if relative_dir else share_root
-        remote_path = f"{remote_dir}/{filename}" if relative_dir else f"{share_root}/{filename}"
-        return share_root, remote_dir, remote_path
-
-    def _ensure_remote_directory(self, share_root: str, remote_dir: str) -> None:
-        if remote_dir == share_root:
-            logger.debug("SMB remote dir points to share root; se omite makedirs(%s).", remote_dir)
-            return
-
-        try:
-            smbclient.makedirs(remote_dir, exist_ok=True)
-        except AttributeError:
-            logger.debug("smbclient.makedirs no esta disponible; se omite creacion de directorio.")
-        except Exception as exc:
-            raise self._map_smb_error(
-                exc,
-                default_message=(
-                    f"No fue posible preparar el directorio remoto SMB '{remote_dir}'. "
-                    "Revisa que el share y la carpeta existan y permitan escritura."
-                ),
-            ) from exc
+        return f"//{host}/{share}/{filename}"
 
     def _map_smb_error(self, exc: Exception, default_message: str) -> Exception:
         text = str(exc).upper()
@@ -125,14 +103,9 @@ class SMBStorageHandler(StorageHandler):
             )
 
         if "STATUS_ACCESS_DENIED" in text:
-            if settings.SMB_DIR.strip() in {"", "/"}:
-                return StoragePermissionError(
-                    "SMB autentico la sesion, pero el servidor rechazo escritura en la raiz del share. "
-                    "Configura SMB_DIR con una subcarpeta writable del recurso compartido."
-                )
             return StoragePermissionError(
                 "SMB autentico la sesion pero el usuario no tiene permisos de escritura "
-                f"sobre el share '{settings.SMB_SHARE}' o la carpeta '{settings.SMB_DIR}'."
+                f"sobre el share '{settings.SMB_SHARE}'."
             )
 
         if (
@@ -143,7 +116,7 @@ class SMBStorageHandler(StorageHandler):
         ):
             return StoragePathError(
                 "La ruta SMB no existe o no es accesible. "
-                f"Revisa SMB_SHARE='{settings.SMB_SHARE}' y SMB_DIR='{settings.SMB_DIR}'."
+                f"Revisa SMB_SHARE='{settings.SMB_SHARE}'."
             )
 
         if "SIGNING" in text or "NEGOTIATE" in text or "DIALECT" in text:
@@ -162,16 +135,16 @@ class SMBStorageHandler(StorageHandler):
     ) -> str:
         safe_name = self._validate_filename(filename)
         resolved_credentials = self._resolve_credentials(credentials)
-        share_root, remote_dir, remote_path = self._build_remote_paths(safe_name)
+        remote_path = self._build_remote_path(safe_name)
 
         try:
             self._register_session(resolved_credentials)
-            self._ensure_remote_directory(share_root, remote_dir)
 
             logger.info("SMB write start path=%s", remote_path)
             with smbclient.open_file(remote_path, mode="wb") as remote_file:
                 with open(temp_path, "rb") as local_file:
-                    while chunk := local_file.read(1024 * 1024):+remote_file.write(chunk)
+                    while chunk := local_file.read(1024 * 1024):
+                        remote_file.write(chunk)
 
             logger.info("SMB write OK '%s' -> %s", safe_name, remote_path)
             return remote_path
