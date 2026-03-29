@@ -109,27 +109,43 @@ class SMBStorageHandler(StorageHandler):
         filename: str,
         credentials: StorageCredentials | None = None,
     ) -> str:
-        safe_name = self._validate_filename(filename)
+        # Sanitizar espacios y caracteres problemáticos para SMB
+        import re
+        safe_filename = re.sub(r'[\s\(\)\[\]\{\}]', '_', filename)
+        safe_filename = re.sub(r'_+', '_', safe_filename)
+
         resolved_credentials = self._resolve_credentials(credentials)
-        remote_path = self._build_remote_path(safe_name)
+        remote_path = self._build_remote_path(safe_filename)
+
+        # Leer contenido y verificar que no esté vacío
         contents = temp_path.read_bytes()
+        if not contents:
+            raise StorageConfigurationError(f"El archivo '{filename}' está vacío o no se pudo leer.")
 
         try:
             self._register_session(resolved_credentials)
+
             with smbclient.open_file(remote_path, mode="wb") as remote_file:
-                remote_file.write(contents)
-            logger.info("SMBStorage save OK '%s' -> %s", safe_name, remote_path)
+                chunk_size = 64 * 1024  # 64 KB — tamaño seguro para SMB
+                offset = 0
+                while offset < len(contents):
+                    chunk = contents[offset:offset + chunk_size]
+                    remote_file.write(chunk)
+                    offset += len(chunk)
+
+            logger.info("SMBStorage save OK '%s' -> %s (%.1f KB)", safe_filename, remote_path, len(contents)/1024)
             return remote_path
+
         except (StorageAuthenticationError, StorageConfigurationError, StoragePathError, StoragePermissionError):
             raise
         except Exception as exc:
             logger.exception(
                 "SMB save failed for '%s' on %s (%s: %r)",
-                safe_name, remote_path, type(exc).__name__, exc,
+                safe_filename, remote_path, type(exc).__name__, exc,
             )
             raise self._map_smb_error(
                 exc,
-                default_message=f"Error SMB no controlado al escribir '{safe_name}' en '{remote_path}'.",
+                default_message=f"Error SMB no controlado al escribir '{safe_filename}' en '{remote_path}'.",
             ) from exc
 
     def delete(
